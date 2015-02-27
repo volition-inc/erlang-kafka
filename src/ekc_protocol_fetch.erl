@@ -20,20 +20,20 @@
 
 
 request(ReplicaId, MaxWaitTime, MinBytes, Topics, #state{} = S) ->
-    ekc_protocol:request(?FETCH_REQUEST, 
+    ekc_protocol:request(?FETCH_REQUEST,
 			 <<
-			   ReplicaId:32/signed, 
-			   MaxWaitTime:32/signed, 
-			   MinBytes:32/signed, 
+			   ReplicaId:32/signed,
+			   MaxWaitTime:32/signed,
+			   MinBytes:32/signed,
 			   (ekc_protocol:topics(Topics))/binary
-			 >>, 
+			 >>,
 			 S).
 
 -spec response(<<_:32,_:_*8>>) -> {ok, list(ekc:topic())}.
 
 response(
   <<
-    NumberOfTopics:32/signed, 
+    NumberOfTopics:32/signed,
     Remainder/binary
   >>) ->
     {ok, response(NumberOfTopics, Remainder)}.
@@ -42,11 +42,11 @@ response(
 response(0, <<>>) ->
     [];
 
-response(N, 
+response(N,
 	 <<
-	   TopicNameLength:16/signed, 
-	   TopicName:TopicNameLength/bytes, 
-	   NumberOfPartitions:32/signed, 
+	   TopicNameLength:16/signed,
+	   TopicName:TopicNameLength/bytes,
+	   NumberOfPartitions:32/signed,
 	   PartitionsRemainder/binary
 	 >>) ->
     {Partitions, Remainder} = partitions(NumberOfPartitions, PartitionsRemainder, []),
@@ -56,21 +56,21 @@ response(N,
 partitions(0, Remainder, A) ->
     {A, Remainder};
 
-partitions(N, 
+partitions(N,
 	   <<
-	     Partition:32/signed, 
-	     ErrorCode:16/signed, 
-	     HighWaterMark:64/signed, 
-	     MessageSetSize:32/signed, 
-	     MessageSet:MessageSetSize/bytes, 
+	     Partition:32/signed,
+	     ErrorCode:16/signed,
+	     HighWaterMark:64/signed,
+	     MessageSetSize:32/signed,
+	     MessageSet:MessageSetSize/bytes,
 	     Remainder/binary
 	   >>, A) ->
-    partitions(N-1, 
-	       Remainder, 
+    partitions(N-1,
+	       Remainder,
 	       [#partition{
-		   id = Partition, 
-		   error_code = ekc:error_code(ErrorCode), 
-		   high_water_mark = HighWaterMark, 
+		   id = Partition,
+		   error_code = ekc:error_code(ErrorCode),
+		   high_water_mark = HighWaterMark,
 		   message_sets = message_set(MessageSet)} | A]).
 
 
@@ -84,9 +84,9 @@ message_set(<<>>) ->
 
 message_set(
   <<
-    Offset:64/signed, 
-    MessageSize:32/signed, 
-    Message:MessageSize/bytes, 
+    Offset:64/signed,
+    MessageSize:32/signed,
+    Message:MessageSize/bytes,
     Remainder/bytes
   >>) ->
     <<_CRC:32, MessageBody/binary>> = Message,
@@ -99,19 +99,17 @@ message_set(
 
 
 message_set(<<
-	      CRC:32, 
-	      Magic:8/signed, 
+	      CRC:32,
+	      Magic:8/signed,
 	      Attributes:8/signed,
-	      -1:32/signed, 
-	      ValueSize:32/signed, 
+	      _:32/signed,
+	      ValueSize:32/signed,
 	      Value:ValueSize/bytes
 	    >>, Offset, CRC, Remainder) ->
     [#message_set{
-	offset = Offset, 
-	crc = CRC, 
-	magic = Magic, 
-	attributes = Attributes, 
+	offset = Offset,
+	crc = CRC,
+	magic = Magic,
+	attributes = Attributes,
 	value = Value} | message_set(Remainder)];
 message_set(_, _, _, <<>>) -> [].
-
-    
