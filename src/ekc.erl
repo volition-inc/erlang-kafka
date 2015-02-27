@@ -19,7 +19,7 @@
 	 start/0,
 	 start/1,
 	 start_link/0,
-	 start_link/1, 
+	 start_link/1,
 	 metadata/1,
 	 metadata/2,
 	 consumer_metadata/2,
@@ -108,22 +108,22 @@ metadata(Server, TopicNames) ->
 
 
 -spec fetch(pid(),
-	    integer(), 
-	    integer(), 
-	    integer(), 
-	    list(binary() | {binary(), 
-			     {non_neg_integer(), 
-			      non_neg_integer(), 
+	    integer(),
+	    integer(),
+	    integer(),
+	    list(binary() | {binary(),
+			     {non_neg_integer(),
+			      non_neg_integer(),
 			      pos_integer()}})) -> {ok, list(topic())}.
 fetch(Server, ReplicaId, MaxWaitTime, MinBytes, Topics) ->
     gen_server:call(Server, {fetch, ReplicaId, MaxWaitTime, MinBytes, Topics}).
 
 
 -spec offset(pid(),
-	     integer(), 
-	     list(binary() | {binary(), 
-			      {non_neg_integer(), 
-			       non_neg_integer(), 
+	     integer(),
+	     list(binary() | {binary(),
+			      {non_neg_integer(),
+			       non_neg_integer(),
 			       pos_integer()}})) -> ok.
 offset(Server, ReplicaId, Topics) ->
     gen_server:call(Server, {offset, ReplicaId, Topics}).
@@ -134,9 +134,9 @@ consumer_metadata(Server, ConsumerGroup) ->
 
 stop(Server) ->
     gen_server:call(Server, stop).
-    
-    
-    
+
+
+
 
 
 
@@ -146,7 +146,7 @@ init(Parameters) ->
 init([{port, Port} | T], S) when is_integer(Port) ->
     init(T, S#state{port = Port});
 
-init([{host, Host} | T], S) -> 
+init([{host, Host} | T], S) ->
     init(T, S#state{host = Host});
 
 init([{correlation_id, CorrelationId} | T], S) when is_integer(CorrelationId) ->
@@ -168,33 +168,33 @@ init([], #state{host = Host, port = Port} = S) ->
 
 
 handle_call(metadata, From, S) ->
-    make_request(ekc_protocol_metadata:request(S), 
-		 From, 
-		 fun ekc_protocol_metadata:response/1, 
+    make_request(ekc_protocol_metadata:request(S),
+		 From,
+		 fun ekc_protocol_metadata:response/1,
 		 S);
 
 handle_call({metadata, TopicNames}, From, S) ->
-    make_request(ekc_protocol_metadata:request(TopicNames, S), 
-		 From, 
-		 fun ekc_protocol_metadata:response/1, 
+    make_request(ekc_protocol_metadata:request(TopicNames, S),
+		 From,
+		 fun ekc_protocol_metadata:response/1,
 		 S);
 
 handle_call({fetch, ReplicaId, MaxWaitTime, MinBytes, Topics}, From, S) ->
-    make_request(ekc_protocol_fetch:request(ReplicaId, MaxWaitTime, MinBytes, Topics, S), 
-		 From, 
-		 fun ekc_protocol_fetch:response/1, 
+    make_request(ekc_protocol_fetch:request(ReplicaId, MaxWaitTime, MinBytes, Topics, S),
+		 From,
+		 fun ekc_protocol_fetch:response/1,
 		 S);
 
 handle_call({offset, ReplicaId, Topics}, From, S) ->
-    make_request(ekc_protocol_offset:request(ReplicaId, Topics, S), 
-		 From, 
-		 fun ekc_protocol_offset:response/1, 
+    make_request(ekc_protocol_offset:request(ReplicaId, Topics, S),
+		 From,
+		 fun ekc_protocol_offset:response/1,
 		 S);
 
 handle_call({consumer_metadata, ConsumerGroup}, From, S) ->
-    make_request(ekc_protocol_consumer_metadata:request(ConsumerGroup, S), 
-		 From, 
-		 fun ekc_protocol_consumer_metadata:response/1, 
+    make_request(ekc_protocol_consumer_metadata:request(ConsumerGroup, S),
+		 From,
+		 fun ekc_protocol_consumer_metadata:response/1,
 		 S);
 
 handle_call(stop, _, S) ->
@@ -205,58 +205,34 @@ handle_cast(_, S) ->
     {stop, abnormal, S}.
 
 
-handle_info({tcp, _, 
-	     <<
-	       Size:32/signed, 
-	       Remainder/binary
-	     >> = Packet},
-	    #state{parts = <<>>} = S) when Size == byte_size(Remainder) ->
-    process_packet(Packet, S);
-
-handle_info({tcp, _, Part}, 
-	    #state{
-	       parts = 
-		   <<
-		     Size:32/signed, 
-		     Data/binary
-		   >> = Parts} = S) when byte_size(
-					   <<
-					     Data/binary, 
-					     Part/binary
-					   >>) >= Size ->
-    <<
-      Size:32/signed, 
-      Packet:Size/bytes, 
-      Remainder/binary
-    >> = <<Parts/binary, Part/binary>>,
-    process_packet(
-      <<
-	Size:32, 
-	Packet/binary
-      >>, S#state{parts = Remainder});
-
-
-handle_info({tcp, _, Part}, 
-	    #state{
-	       parts = Parts, 
-	       socket = Socket} = S) ->
-    case active(Socket, once) of
-	ok ->
-	    {noreply, S#state{
-			parts = 
-			    <<
-			      Parts/binary, 
-			      Part/binary
-			    >>}};
-
-	{error, _} = Reason ->
-	    {stop, Reason, S}
-    end;
+handle_info({tcp, _, Part}, #state{parts = Parts} = S) ->
+  process_tcp_data(S#state{parts = << Parts/binary, Part/binary >>});
 
 handle_info({tcp_closed, _}, S) ->
     {stop, abnormal, S}.
 
 
+process_tcp_data(#state{ parts = << Size:32/signed, Data/binary >> = Parts } = S)
+                                           when byte_size(Data) >= Size ->
+  << Size:32/signed, Bytes:Size/bytes, Remainder/binary>> = Parts,
+  Packet = << Size:32, Bytes/binary >>,
+  case process_packet(Packet, S#state{parts = Remainder}) of
+    {noreply, S2} ->
+      process_tcp_data(S2);
+    {stop, _, _, _} = Stop -> Stop
+  end;
+
+process_tcp_data(#state{parts = <<>>} = S) ->
+  {noreply, S};
+
+process_tcp_data(#state{socket = Socket} = S) ->
+  case active(Socket, once) of
+    ok ->
+      {noreply, S};
+
+    {error, _} = Reason ->
+      {stop, Reason, S}
+    end.
 
 
 code_change(_, State, _) ->
@@ -267,30 +243,30 @@ terminate(_, _) ->
 
 
 
--spec make_request(#request{}, 
-		   {pid(), term()}, 
-		   ekc_protocol:handler(), 
+-spec make_request(#request{},
+		   {pid(), term()},
+		   ekc_protocol:handler(),
 		   #state{}) -> {noreply, #state{}} | {stop, _, _, #state{}}.
 
 make_request(#request{
-		packet = Packet, 
-		state = S2}, 
-	     From, 
-	     Handler, 
+		packet = Packet,
+		state = S2},
+	     From,
+	     Handler,
 	     #state{
-		correlation_id = CorrelationId, 
-		requests = Requests, 
+		correlation_id = CorrelationId,
+		requests = Requests,
 		socket = Socket} = S1) ->
     case gen_tcp:send(Socket, Packet) of
 	ok ->
 	    case active(Socket, once) of
 		ok ->
-		    {noreply, 
+		    {noreply,
 		     S2#state{
-		       requests = orddict:store(CorrelationId, 
+		       requests = orddict:store(CorrelationId,
 						#response{
-						   from = From, 
-						   handler = Handler}, 
+						   from = From,
+						   handler = Handler},
 						Requests)}};
 
 		{error, _} = Error ->
@@ -300,19 +276,19 @@ make_request(#request{
 	{error, _} = Error ->
 	    {stop, abnormal, Error, S1}
     end.
-    
+
 
 process_packet(
   <<
-    Size:32/signed, 
+    Size:32/signed,
     Packet:Size/bytes
   >>,
   #state{
-     requests = Requests, 
+     requests = Requests,
      socket = Socket} = S) ->
 
     <<
-      CorrelationId:32/signed, 
+      CorrelationId:32/signed,
       Remainder/bytes>> = Packet,
 
     case orddict:find(CorrelationId, Requests) of
@@ -383,4 +359,3 @@ error_code(16) ->
 
 make() ->
     make:all([load]).
-    
