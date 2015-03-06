@@ -25,24 +25,24 @@
 
 
 
--spec request(?FETCH_REQUEST | 
-	      ?OFFSET_REQUEST | 
-	      ?METADATA_REQUEST | 
+-spec request(?FETCH_REQUEST |
+	      ?OFFSET_REQUEST |
+	      ?METADATA_REQUEST |
 	      ?CONSUMER_METADATA_REQUEST, <<_:8,_:_*8>>, #state{}) -> #request{}.
 
-request(ApiKey, 
-	RequestMessage, 
+request(ApiKey,
+	RequestMessage,
 	#state{
-	   api_version = ApiVersion, 
-	   correlation_id = CorrelationId, 
+	   api_version = ApiVersion,
+	   correlation_id = CorrelationId,
 	   client_id = ClientId} = S) ->
 
     #request{packet = frame(<<
-			      ApiKey:16/signed, 
-			      ApiVersion:16/signed, 
-			      CorrelationId:32/signed, 
+			      ApiKey:16/signed,
+			      ApiVersion:16/signed,
+			      CorrelationId:32/signed,
 			      (byte_size(ClientId)):16/signed,
-			      ClientId/bytes, 
+			      ClientId/bytes,
 			      RequestMessage/binary
 			    >>),
 	     state = S#state{correlation_id = CorrelationId+1}}.
@@ -53,16 +53,16 @@ request(ApiKey,
 -spec frame(<<_:8,_:_*8>>) -> <<_:32,_:_*8>>.
 frame(Message) ->
     <<
-      (byte_size(Message)):32/signed, 
+      (byte_size(Message)):32/signed,
       Message/binary
     >>.
 
 
--spec topics(list(binary() | {binary(), {non_neg_integer(), non_neg_integer(), pos_integer()}})) -> binary().
+-spec topics(list(binary() | {binary(), list({non_neg_integer(), non_neg_integer(), pos_integer()})})) -> binary().
 
 
 topics(Topics) ->
-    topics(Topics, 
+    topics(Topics,
 	   <<
 	     (length(Topics)):32/signed
 	   >>).
@@ -75,18 +75,17 @@ topics([], A) ->
 topics([{TopicName, Partitions} | T], A) ->
     topics(T,
 	   <<
-	     A/binary, 
-	     (byte_size(TopicName)):16/signed, 
-	     TopicName/bytes, 
-	     (length(Partitions)):32/signed, 
+	     A/binary,
+	     (byte_size(TopicName)):16/signed,
+	     TopicName/bytes,
+	     (length(Partitions)):32/signed,
 	     (list_to_binary([
 			      <<
-				Partition:32/signed, 
-				FetchOffset:64/signed, 
+				Partition:32/signed,
+				FetchOffset:64/signed,
 				MaxBytes:32/signed
 			      >> || {Partition, FetchOffset, MaxBytes} <- Partitions]))/binary
 	   >>);
 
 topics([TopicName | T], A) ->
    topics([{TopicName, []} | T], A).
-    

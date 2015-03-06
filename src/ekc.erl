@@ -77,11 +77,11 @@
 		      consumer_coordinator_not_available |
 		      not_coordinator_for_consumer.
 
--opaque message_set() :: #message_set{}.
--opaque broker() :: #broker{}.
--opaque partition() :: #partition{}.
--opaque topic() :: #topic{}.
--opaque metadata() :: #metadata{}.
+-type message_set() :: #message_set{}.
+-type broker() :: #broker{}.
+-type partition() :: #partition{}.
+-type topic() :: #topic{}.
+-type metadata() :: #metadata{}.
 
 
 
@@ -112,9 +112,9 @@ metadata(Server, TopicNames) ->
 	    integer(),
 	    integer(),
 	    list(binary() | {binary(),
-			     {non_neg_integer(),
+			     list({non_neg_integer(),
 			      non_neg_integer(),
-			      pos_integer()}})) -> {ok, list(topic())}.
+			      pos_integer()})})) -> {ok, list(topic())}.
 fetch(Server, ReplicaId, MaxWaitTime, MinBytes, Topics) ->
     gen_server:call(Server, {fetch, ReplicaId, MaxWaitTime, MinBytes, Topics}).
 
@@ -122,9 +122,9 @@ fetch(Server, ReplicaId, MaxWaitTime, MinBytes, Topics) ->
 -spec offset(pid(),
 	     integer(),
 	     list(binary() | {binary(),
-			      {non_neg_integer(),
-			       non_neg_integer(),
-			       pos_integer()}})) -> ok.
+			      list({non_neg_integer(),
+			       integer(),
+			       pos_integer()})})) -> {ok, list(ekc:topic())}.
 offset(Server, ReplicaId, Topics) ->
     gen_server:call(Server, {offset, ReplicaId, Topics}).
 
@@ -219,8 +219,9 @@ process_tcp_data(#state{ parts = << Size:32/signed, Data/binary >> = Parts } = S
   case process_packet(Packet, S#state{parts = Remainder}) of
     {noreply, S2} ->
       process_tcp_data(S2);
-    {stop, _, _, _} = Stop -> Stop
+    {stop, _, _} = Stop -> Stop
   end;
+
 
 process_tcp_data(#state{parts = <<>>} = S) ->
   {noreply, S};
