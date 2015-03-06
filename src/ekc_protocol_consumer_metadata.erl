@@ -19,19 +19,18 @@
 	 response/1]).
 
 request(ConsumerGroup, S) ->
-    ekc:request(?CONSUMER_METADATA_REQUEST, 
+    ekc_protocol:request(?CONSUMER_METADATA_REQUEST, 
 		<<
-		  (byte_size(ConsumerGroup)):16/signed, 
+		  (byte_size(ConsumerGroup)):16/signed,
 		  ConsumerGroup/binary
 		>>, S).
 
 response(
   <<
-    ErrorCode:16/signed, 
-    Id:32/signed, 
-    HostLength:16/signed, 
-    Host:HostLength/bytes, 
+    ErrorCode:16/signed,
+    Id:32/signed,
+    HostLength:16/signed,
+    Host:HostLength/bytes,
     Port:32/signed
   >>) ->
     {ok, {ekc:error_code(ErrorCode), Id, Host, Port}}.
-
